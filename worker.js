@@ -646,8 +646,7 @@ async function handleIndex(env) {
 
 ${sections.join("\n")}
 
-<footer>Source: <a href="https://tangled.org/nandi.uk/artifacts">tangled.org/nandi.uk/artifacts</a>
-  · <a href="https://github.com/codegod100/artifacts">github.com/codegod100/artifacts</a></footer>
+<footer>Source: <a href="https://tangled.org/nandi.uk/artifacts">tangled.org/nandi.uk/artifacts</a></footer>
 </body>
 </html>`;
 
