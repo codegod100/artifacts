@@ -13,6 +13,9 @@ jobs:
       - name: Deploy worker
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          # CLOUDFLARE_ACCOUNT_ID is optional — deploy.sh derives it from the
+          # token via GET /accounts when unset. Set this secret to pin a
+          # specific account if the token has access to more than one.
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           TANGLED_WEBHOOK_SECRET: ${{ secrets.TANGLED_WEBHOOK_SECRET }}
           BUILDBUDDY_API_KEY: ${{ secrets.BUILDBUDDY_API_KEY }}

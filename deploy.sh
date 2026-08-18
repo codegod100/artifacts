@@ -19,7 +19,8 @@
 #                          DNS on latha.org) — a `wrangler login` OAuth
 #                          token (see ~/.config/.wrangler/config/default.toml
 #                          -> oauth_token) works fine as this value too.
-#   CLOUDFLARE_ACCOUNT_ID
+#   CLOUDFLARE_ACCOUNT_ID  (optional — derived from the token via
+#                          GET /accounts if unset)
 #
 # Optional env (only needed to *set/rotate* a value — see below):
 #   TANGLED_WEBHOOK_SECRET Paste the same value into every registered app's
@@ -44,7 +45,7 @@
 #   ./deploy.sh
 #
 # Usage (code-only redeploy, preserving existing secrets):
-#   export CLOUDFLARE_API_TOKEN=... CLOUDFLARE_ACCOUNT_ID=...
+#   export CLOUDFLARE_API_TOKEN=...
 #   ./deploy.sh
 set -euo pipefail
 
@@ -56,12 +57,21 @@ ZONE_NAME="latha.org"
 API="https://api.cloudflare.com/client/v4"
 
 : "${CLOUDFLARE_API_TOKEN:?export CLOUDFLARE_API_TOKEN}"
-: "${CLOUDFLARE_ACCOUNT_ID:?export CLOUDFLARE_ACCOUNT_ID}"
 : "${TANGLED_WEBHOOK_SECRET:=}"
 : "${BUILDBUDDY_API_KEY:=}"
 : "${UPLOAD_TOKEN:=}"
 
 auth=(-H "Authorization: Bearer $CLOUDFLARE_API_TOKEN")
+
+if [[ -z "${CLOUDFLARE_ACCOUNT_ID:-}" ]]; then
+  echo "--- deriving CLOUDFLARE_ACCOUNT_ID from API token" >&2
+  CLOUDFLARE_ACCOUNT_ID="$(curl -fsS "${auth[@]}" "$API/accounts" | jq -r '.result[0].id')"
+  if [[ -z "$CLOUDFLARE_ACCOUNT_ID" || "$CLOUDFLARE_ACCOUNT_ID" == "null" ]]; then
+    echo "error: could not derive CLOUDFLARE_ACCOUNT_ID from API token — set it explicitly" >&2
+    exit 1
+  fi
+  echo "derived CLOUDFLARE_ACCOUNT_ID=$CLOUDFLARE_ACCOUNT_ID" >&2
+fi
 
 echo "--- ensure R2 bucket $BUCKET_NAME" >&2
 curl -fsS "${auth[@]}" -X POST \
