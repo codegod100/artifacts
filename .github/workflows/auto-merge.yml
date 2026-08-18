@@ -14,5 +14,8 @@ jobs:
     steps:
       - name: Enable auto-merge
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Use a PAT instead of GITHUB_TOKEN so the resulting push to main
+          # fires the Deploy workflow. Pushes made by GITHUB_TOKEN are silently
+          # excluded from triggering other workflows by GitHub Actions design.
+          GH_TOKEN: ${{ secrets.PAT_TOKEN || secrets.GITHUB_TOKEN }}
         run: gh pr merge --auto --squash "${{ github.event.pull_request.number }}" --repo "${{ github.repository }}"
