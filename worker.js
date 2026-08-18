@@ -607,7 +607,10 @@ async function handleIndex(env) {
     const flatpakBlock = hasRepo && flatpakrefs.length
       ? flatpakrefs.map((ref) => `
       <p><strong>Flatpak:</strong></p>
-      <pre>flatpak install --user https://artifacts.latha.org/artifacts/${ref}</pre>`).join("\n")
+      <div class="pre-wrap">
+        <pre>flatpak install --user https://artifacts.latha.org/artifacts/${ref}</pre>
+        <button class="copy-chip" onclick="var t=this,p=t.closest('.pre-wrap').querySelector('pre');navigator.clipboard.writeText(p.textContent.trim()).then(function(){t.textContent='Copied!';setTimeout(function(){t.textContent='Copy'},1500)})">Copy</button>
+      </div>`).join("\n")
       : "";
 
     sections.push(`<section>
@@ -633,10 +636,13 @@ async function handleIndex(env) {
   body { font-family: system-ui, sans-serif; max-width: 40rem; margin: 2rem auto; padding: 0 1rem; line-height: 1.5; }
   h1 { font-size: 1.4rem; }
   h2 { font-size: 1.1rem; margin-top: 2rem; }
-  pre { background: #f0f0f0; padding: 0.6rem 0.8rem; overflow-x: auto; border-radius: 4px; }
+  pre { background: #f0f0f0; padding: 0.6rem 0.8rem; border-radius: 4px; white-space: pre-wrap; word-break: break-all; }
   code { background: #f0f0f0; padding: 0.1rem 0.3rem; border-radius: 3px; }
   ul { padding-left: 1.3rem; }
   a { color: #0554b3; }
+  .pre-wrap { position: relative; }
+  .copy-chip { position: absolute; top: 0.4rem; right: 0.4rem; background: #ddd; border: none; border-radius: 3px; padding: 0.15rem 0.5rem; font-size: 0.75rem; cursor: pointer; }
+  .copy-chip:hover { background: #ccc; }
   footer { margin-top: 3rem; font-size: 0.85rem; color: #666; }
 </style>
 </head>
