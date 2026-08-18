@@ -636,7 +636,7 @@ async function handleIndex(env) {
   body { font-family: system-ui, sans-serif; max-width: 40rem; margin: 2rem auto; padding: 0 1rem; line-height: 1.5; }
   h1 { font-size: 1.4rem; }
   h2 { font-size: 1.1rem; margin-top: 2rem; }
-  pre { background: #f0f0f0; padding: 0.6rem 0.8rem; border-radius: 4px; white-space: pre-wrap; word-break: break-all; }
+  pre { background: #f0f0f0; padding: 0.6rem 0.8rem; border-radius: 4px; overflow-x: auto; }
   code { background: #f0f0f0; padding: 0.1rem 0.3rem; border-radius: 3px; }
   ul { padding-left: 1.3rem; }
   a { color: #0554b3; }
