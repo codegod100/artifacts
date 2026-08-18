@@ -633,7 +633,7 @@ async function handleIndex(env) {
 <title>artifacts.latha.org</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <style>
-  body { font-family: system-ui, sans-serif; max-width: 40rem; margin: 2rem auto; padding: 0 1rem; line-height: 1.5; }
+  body { font-family: system-ui, sans-serif; max-width: 64rem; margin: 2rem auto; padding: 0 1rem; line-height: 1.5; }
   h1 { font-size: 1.4rem; }
   h2 { font-size: 1.1rem; margin-top: 2rem; }
   pre { background: #f0f0f0; padding: 0.6rem 0.8rem; border-radius: 4px; overflow-x: auto; }
