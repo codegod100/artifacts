@@ -633,17 +633,93 @@ async function handleIndex(env) {
 <title>artifacts.latha.org</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <style>
-  body { font-family: system-ui, sans-serif; max-width: 64rem; margin: 2rem auto; padding: 0 1rem; line-height: 1.5; }
-  h1 { font-size: 1.4rem; }
-  h2 { font-size: 1.1rem; margin-top: 2rem; }
-  pre { background: #f0f0f0; padding: 0.6rem 0.8rem; border-radius: 4px; overflow-x: auto; }
-  code { background: #f0f0f0; padding: 0.1rem 0.3rem; border-radius: 3px; }
-  ul { padding-left: 1.3rem; }
-  a { color: #0554b3; }
+  :root {
+    --bg: #0d1117;
+    --surface: #161b22;
+    --border: #30363d;
+    --text: #e6edf3;
+    --muted: #8b949e;
+    --accent: #58a6ff;
+    --accent-dim: #1f6feb;
+    --code-bg: #1c2128;
+    --chip-bg: #21262d;
+    --chip-hover: #30363d;
+    --green: #3fb950;
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: system-ui, -apple-system, sans-serif;
+    max-width: 64rem;
+    margin: 2rem auto;
+    padding: 0 1.25rem;
+    line-height: 1.6;
+    background: var(--bg);
+    color: var(--text);
+  }
+  h1 {
+    font-size: 1.35rem;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    color: var(--accent);
+    margin-bottom: 0.25rem;
+  }
+  h2 {
+    font-size: 1rem;
+    font-weight: 600;
+    margin-top: 2.5rem;
+    margin-bottom: 0.5rem;
+    padding: 0.6rem 0.8rem;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text);
+  }
+  section {
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 1rem 1.25rem 1.25rem;
+    margin-top: 1.25rem;
+    background: var(--surface);
+  }
+  section h2 { margin-top: 0; }
+  pre {
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    padding: 0.65rem 0.9rem;
+    border-radius: 6px;
+    overflow-x: auto;
+    font-size: 0.875rem;
+    color: var(--green);
+  }
+  code {
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    padding: 0.1rem 0.35rem;
+    border-radius: 4px;
+    font-size: 0.875em;
+    color: var(--accent);
+  }
+  ul { padding-left: 1.3rem; margin: 0.5rem 0; }
+  li { margin: 0.2rem 0; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  p { margin: 0.5rem 0; }
   .pre-wrap { position: relative; }
-  .copy-chip { position: absolute; top: 0.4rem; right: 0.4rem; background: #ddd; border: none; border-radius: 3px; padding: 0.15rem 0.5rem; font-size: 0.75rem; cursor: pointer; }
-  .copy-chip:hover { background: #ccc; }
-  footer { margin-top: 3rem; font-size: 0.85rem; color: #666; }
+  .copy-chip {
+    position: absolute;
+    top: 0.4rem;
+    right: 0.4rem;
+    background: var(--chip-bg);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 0.15rem 0.55rem;
+    font-size: 0.75rem;
+    cursor: pointer;
+    color: var(--muted);
+    transition: background 0.15s, color 0.15s;
+  }
+  .copy-chip:hover { background: var(--chip-hover); color: var(--text); }
+  footer { margin-top: 3rem; font-size: 0.85rem; color: var(--muted); border-top: 1px solid var(--border); padding-top: 1rem; }
 </style>
 </head>
 <body>
