@@ -57,6 +57,7 @@ const APPS = {
     repoDid: "did:plc:eimwo4adqwppiiweleayixez",
     targets: [
       { buckTarget: "//:sleek-android-apk", filename: "sleek.apk", contentType: "application/vnd.android.package-archive", tagOnly: false },
+      { buckTarget: "//:sleek-android-aab", filename: "sleek.aab", contentType: "application/octet-stream", tagOnly: false },
       { buckTarget: "//:sleek-host", filename: "sleek-x86_64-linux", contentType: "application/octet-stream", tagOnly: true },
     ],
   },
