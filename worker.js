@@ -573,6 +573,24 @@ async function handleDownload(request, env, url) {
   const headers = new Headers();
   obj.writeHttpMetadata(headers);
   headers.set("etag", obj.httpEtag);
+
+  // Inject xa.noenumerate=false into flatpak OSTree repo configs so that
+  // remotes added via `flatpak install --user <url>.flatpakref` appear in
+  // `flatpak remote-list` rather than being silently hidden. flatpak-builder /
+  // build-export don't set this by default, and the Flatpak client marks
+  // remotes added from a .flatpakref as noenumerate=true unless the repo
+  // config explicitly opts out.
+  if (key.endsWith("/repo/config")) {
+    let text = await new Response(obj.body).text();
+    if (!text.includes("xa.noenumerate")) {
+      // Append into the [flatpak] section; if the section is last (the normal
+      // OSTree layout), appending before the trailing newline is safe.
+      text = text.trimEnd() + "\nxa.noenumerate=false\n";
+      headers.delete("content-length");
+      return new Response(text, { headers });
+    }
+  }
+
   return new Response(obj.body, { headers });
 }
 
