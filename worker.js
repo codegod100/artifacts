@@ -608,15 +608,24 @@ function escapeHtml(s) {
 async function handleIndex(env) {
   const sections = [];
   for (const [appSlug, app] of Object.entries(APPS)) {
-    const listing = await env.ARTIFACTS.list({ prefix: `${appSlug}/` });
-    const keys = listing.objects.map((o) => o.key);
+    // Use targeted queries rather than a single list({ prefix: `${appSlug}/` }).
+    // R2 list() caps at 1000 objects and returns keys in lexicographic order;
+    // "latest/" sorts after all hex-SHA prefixes ("l" > "f"), so once the
+    // bucket accumulates 1000+ build artifacts the latest entries are silently
+    // truncated and never appear on the index page.
+    const [latestListing, repoObj, topLevelListing] = await Promise.all([
+      env.ARTIFACTS.list({ prefix: `${appSlug}/latest/` }),
+      env.ARTIFACTS.head(`${appSlug}/repo/config`),
+      env.ARTIFACTS.list({ prefix: `${appSlug}/`, delimiter: "/" }),
+    ]);
 
-    const latestFiles = keys
-      .filter((k) => k.startsWith(`${appSlug}/latest/`))
-      .map((k) => k.slice(`${appSlug}/latest/`.length))
+    const latestFiles = latestListing.objects
+      .map((o) => o.key.slice(`${appSlug}/latest/`.length))
       .sort();
-    const hasRepo = keys.includes(`${appSlug}/repo/config`);
-    const flatpakrefs = keys.filter((k) => new RegExp(`^${appSlug}/[^/]+\\.flatpakref$`).test(k));
+    const hasRepo = repoObj !== null;
+    const flatpakrefs = topLevelListing.objects
+      .map((o) => o.key)
+      .filter((k) => new RegExp(`^${appSlug}/[^/]+\\.flatpakref$`).test(k));
 
     const latestItems = latestFiles.length
       ? latestFiles.map((f) => `<li><a href="/artifacts/${appSlug}/latest/${encodeURIComponent(f)}">${escapeHtml(f)}</a></li>`).join("\n        ")
