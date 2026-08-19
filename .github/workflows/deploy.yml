@@ -4,12 +4,27 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+  # Also fire when Auto Merge completes — auto-merge uses GITHUB_TOKEN,
+  # which GitHub intentionally excludes from triggering other workflows
+  # (push events from GITHUB_TOKEN don't fire further push-triggered runs).
+  # workflow_run is triggered by GitHub Actions itself, not by the push,
+  # so it bypasses that restriction. The checkout below always gets main's
+  # current HEAD, which is what we want: deploy whatever just landed.
+  workflow_run:
+    workflows: ["Auto Merge"]
+    types: [completed]
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    if: >
+      github.event_name == 'push' ||
+      github.event_name == 'workflow_dispatch' ||
+      github.event.workflow_run.conclusion == 'success'
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: main
 
       - name: Deploy worker
         env:
