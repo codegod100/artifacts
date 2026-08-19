@@ -631,10 +631,21 @@ async function handleIndex(env) {
       </div>`).join("\n")
       : "";
 
+    const apkFiles = latestFiles.filter((f) => f.endsWith(".apk"));
+    const apkBlock = apkFiles.length
+      ? apkFiles.map((f) => `
+      <p><strong>APK:</strong></p>
+      <div class="pre-wrap">
+        <pre>https://artifacts.latha.org/artifacts/${appSlug}/latest/${encodeURIComponent(f)}</pre>
+        <button class="copy-chip" onclick="var t=this,p=t.closest('.pre-wrap').querySelector('pre');navigator.clipboard.writeText(p.textContent.trim()).then(function(){t.textContent='Copied!';setTimeout(function(){t.textContent='Copy'},1500)})">Copy</button>
+      </div>`).join("\n")
+      : "";
+
     sections.push(`<section>
       <h2>${escapeHtml(appSlug)}</h2>
       <p><a href="${app.cloneUrl}">${escapeHtml(app.cloneUrl.replace(/^https?:\/\//, ""))}</a></p>
       ${flatpakBlock}
+      ${apkBlock}
       <p><strong>Latest main-branch builds:</strong></p>
       <ul>
         ${latestItems}
