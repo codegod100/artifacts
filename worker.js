@@ -117,6 +117,22 @@ export default {
     if (request.method === "GET" && url.pathname === "/") {
       return handleIndex(env);
     }
+    // Admin dashboard — protected by atproto OAuth session cookie
+    if (url.pathname === "/admin" || url.pathname === "/admin/") {
+      return handleAdminDashboard(request, env);
+    }
+    if (request.method === "GET" && url.pathname === "/admin/login") {
+      return handleAdminLogin(request, env);
+    }
+    if (request.method === "GET" && url.pathname === "/admin/oauth/callback") {
+      return handleAdminOAuthCallback(request, env, url);
+    }
+    if (request.method === "POST" && url.pathname.startsWith("/admin/trigger/")) {
+      return handleAdminTrigger(request, env, url);
+    }
+    if (request.method === "GET" && url.pathname === "/admin/logout") {
+      return handleAdminLogout(request, env);
+    }
     return new Response("not found", { status: 404 });
   },
 };
@@ -789,7 +805,9 @@ ${sections.join("\n")}
 
 const ATPROTO_CLIENT_ID = "https://artifacts.latha.org/client-metadata.json";
 const ATPROTO_REDIRECT_URI = "https://artifacts.latha.org/oauth/callback";
+const ADMIN_OAUTH_REDIRECT_URI = "https://artifacts.latha.org/admin/oauth/callback";
 const ATPROTO_SCOPE = "atproto transition:generic";
+const ADMIN_SESSION_TTL_MS = 3600 * 1000;
 // nandi's personal DID (handle nandi.uk resolves here; DIDs are the stable
 // identifier, handles can change). Not any individual app's repo DID —
 // that's per-app in APPS above, used only for the artifact record's
@@ -881,7 +899,7 @@ function handleClientMetadata() {
     client_id: ATPROTO_CLIENT_ID,
     client_name: "artifacts.latha.org build publisher",
     client_uri: "https://artifacts.latha.org/",
-    redirect_uris: [ATPROTO_REDIRECT_URI],
+    redirect_uris: [ATPROTO_REDIRECT_URI, ADMIN_OAUTH_REDIRECT_URI],
     scope: ATPROTO_SCOPE,
     grant_types: ["authorization_code", "refresh_token"],
     response_types: ["code"],
@@ -1043,4 +1061,347 @@ async function getAtprotoSession(env) {
   };
   await env.ARTIFACTS.put("oauth/session.json", JSON.stringify(session));
   return session;
+}
+
+// --- Admin dashboard -------------------------------------------------------
+//
+// Separate from the atproto OAuth publisher session above. The admin panel
+// lets nandi log in via their own atproto identity (same DID, different
+// redirect_uri), get a short-lived browser session cookie, and trigger
+// BuildBuddy runs for any registered app without needing the Tangled webhook.
+//
+// Session tokens are random 32-byte values stored in R2 under
+// admin-sessions/<token>.json, referenced by an HttpOnly cookie. TTL is 1h.
+// Only ATPROTO_DID is permitted to create an admin session (checked after the
+// OAuth token exchange returns the `sub` claim).
+
+async function getAdminSession(request, env) {
+  const cookieHeader = request.headers.get("cookie") || "";
+  const match = cookieHeader.match(/(?:^|;\s*)admin_session=([A-Za-z0-9_-]+)/);
+  if (!match) return null;
+  const token = match[1];
+  const obj = await env.ARTIFACTS.get(`admin-sessions/${token}.json`);
+  if (!obj) return null;
+  const session = JSON.parse(await new Response(obj.body).text());
+  if (Date.now() > session.expiresAt) {
+    await env.ARTIFACTS.delete(`admin-sessions/${token}.json`);
+    return null;
+  }
+  return { ...session, token };
+}
+
+async function requireAdminAuth(request, env) {
+  const session = await getAdminSession(request, env);
+  if (!session) {
+    return { session: null, redirect: Response.redirect(new URL(request.url).origin + "/admin/login", 302) };
+  }
+  return { session, redirect: null };
+}
+
+// Fetches the head commit SHA on main from a tangled.org repo page.
+// Used when the admin triggers a build without specifying a SHA.
+async function resolveMainCommit(cloneUrl) {
+  try {
+    const res = await fetch(`${cloneUrl}/commits/main`);
+    if (!res.ok) return null;
+    const html = await res.text();
+    const match = html.match(/\/commit\/([0-9a-f]{40})/);
+    return match ? match[1] : null;
+  } catch {
+    return null;
+  }
+}
+
+async function handleAdminDashboard(request, env) {
+  const { session, redirect } = await requireAdminAuth(request, env);
+  if (redirect) return redirect;
+
+  const appSections = Object.entries(APPS).map(([slug, app]) => `
+    <section class="app-card">
+      <h2>${escapeHtml(slug)}</h2>
+      <p class="repo-link"><a href="${escapeHtml(app.cloneUrl)}" target="_blank" rel="noopener">${escapeHtml(app.cloneUrl.replace(/^https?:\/\//, ""))}</a></p>
+      <form method="POST" action="/admin/trigger/${escapeHtml(slug)}">
+        <div class="form-row">
+          <label for="sha-${escapeHtml(slug)}">Commit SHA <span class="label-note">(leave blank to use latest main)</span></label>
+          <input type="text" id="sha-${escapeHtml(slug)}" name="sha"
+            placeholder="e.g. a1b2c3d4e5f6… or leave blank"
+            class="sha-input" autocomplete="off" spellcheck="false">
+        </div>
+        <button type="submit" class="btn-primary">Trigger Build</button>
+      </form>
+    </section>`).join("\n");
+
+  const html = `<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Admin — artifacts.latha.org</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  :root {
+    --bg: #0d1117; --surface: #161b22; --border: #30363d;
+    --text: #e6edf3; --muted: #8b949e; --accent: #58a6ff;
+    --accent-dim: #1f6feb; --code-bg: #1c2128; --green: #3fb950;
+    --red: #f85149;
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: system-ui, -apple-system, sans-serif;
+    max-width: 56rem; margin: 2rem auto; padding: 0 1.25rem;
+    line-height: 1.6; background: var(--bg); color: var(--text);
+  }
+  .header-row { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 0.25rem; }
+  h1 { font-size: 1.35rem; font-weight: 600; color: var(--accent); margin: 0; }
+  .logout { font-size: 0.85rem; color: var(--muted); text-decoration: none; }
+  .logout:hover { color: var(--red); }
+  .did { font-family: monospace; font-size: 0.8rem; color: var(--muted); margin: 0 0 1.5rem; }
+  .app-card {
+    border: 1px solid var(--border); border-radius: 8px;
+    padding: 1rem 1.25rem 1.25rem; margin-top: 1.25rem;
+    background: var(--surface);
+  }
+  h2 { font-size: 1rem; font-weight: 600; margin: 0 0 0.2rem; color: var(--text); }
+  .repo-link { margin: 0 0 0.85rem; font-size: 0.85rem; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  label { display: block; font-size: 0.8rem; color: var(--muted); margin-bottom: 0.3rem; }
+  .label-note { font-style: italic; }
+  .sha-input {
+    display: block; width: 100%; max-width: 30rem;
+    background: var(--code-bg); border: 1px solid var(--border);
+    border-radius: 6px; padding: 0.4rem 0.7rem;
+    color: var(--text); font-family: monospace; font-size: 0.875rem;
+    margin-bottom: 0.75rem;
+  }
+  .sha-input:focus { outline: none; border-color: var(--accent-dim); }
+  .btn-primary {
+    background: var(--accent-dim); color: #fff;
+    border: none; border-radius: 6px;
+    padding: 0.45rem 1.1rem; font-size: 0.875rem; font-weight: 500;
+    cursor: pointer; transition: background 0.15s;
+  }
+  .btn-primary:hover { background: var(--accent); }
+  footer { margin-top: 3rem; font-size: 0.85rem; color: var(--muted); border-top: 1px solid var(--border); padding-top: 1rem; }
+</style>
+</head>
+<body>
+<div class="header-row">
+  <h1>Admin — artifacts.latha.org</h1>
+  <a class="logout" href="/admin/logout">Logout</a>
+</div>
+<p class="did">Signed in as ${escapeHtml(session.did)}</p>
+
+${appSections}
+
+<footer><a href="/">← back to artifacts</a></footer>
+</body>
+</html>`;
+
+  return new Response(html, { headers: { "content-type": "text/html; charset=utf-8" } });
+}
+
+async function handleAdminLogin(request, env) {
+  const { session } = await requireAdminAuth(request, env);
+  if (session) return Response.redirect(new URL(request.url).origin + "/admin", 302);
+
+  try {
+    const { pds, issuer, authServerMeta } = await resolvePdsAndAuthServer();
+    const dpopKeys = await generateDpopKeypair();
+    const verifier = randomB64url(32);
+    const challenge = b64url(await sha256(verifier));
+    // Prefix state with "admin_" to distinguish from the publisher OAuth flow
+    // in case both flows are in flight simultaneously.
+    const state = `admin_${randomB64url(16)}`;
+
+    const parBody = new URLSearchParams({
+      client_id: ATPROTO_CLIENT_ID,
+      redirect_uri: ADMIN_OAUTH_REDIRECT_URI,
+      response_type: "code",
+      scope: ATPROTO_SCOPE,
+      state,
+      code_challenge: challenge,
+      code_challenge_method: "S256",
+      login_hint: ATPROTO_DID,
+    });
+
+    const parResp = await dpopFetch(authServerMeta.pushed_authorization_request_endpoint, {
+      method: "POST",
+      headers: { "content-type": "application/x-www-form-urlencoded" },
+      body: parBody.toString(),
+      dpopKeys,
+    });
+    if (!parResp.ok) {
+      const t = await parResp.text();
+      return new Response(`PAR request failed: ${parResp.status} ${t}`, { status: 502 });
+    }
+    const { request_uri } = await parResp.json();
+
+    await env.ARTIFACTS.put(`oauth/flow/${state}.json`, JSON.stringify({
+      verifier, dpopKeys, pds, issuer, authServerMeta,
+      createdAt: new Date().toISOString(),
+    }));
+
+    const authUrl = new URL(authServerMeta.authorization_endpoint);
+    authUrl.searchParams.set("client_id", ATPROTO_CLIENT_ID);
+    authUrl.searchParams.set("request_uri", request_uri);
+    return Response.redirect(authUrl.toString(), 302);
+  } catch (e) {
+    return new Response(`admin login setup failed: ${e.message}`, { status: 500 });
+  }
+}
+
+async function handleAdminOAuthCallback(request, env, url) {
+  const code = url.searchParams.get("code");
+  const state = url.searchParams.get("state");
+  const err = url.searchParams.get("error");
+  if (err) return new Response(`oauth error: ${err} ${url.searchParams.get("error_description") || ""}`, { status: 400 });
+  if (!code || !state) return new Response("missing code/state", { status: 400 });
+  if (!state.startsWith("admin_")) return new Response("invalid state", { status: 400 });
+
+  const flowObj = await env.ARTIFACTS.get(`oauth/flow/${state}.json`);
+  if (!flowObj) return new Response("unknown or expired oauth state — try /admin/login again", { status: 400 });
+  const flow = JSON.parse(await new Response(flowObj.body).text());
+
+  try {
+    const tokenBody = new URLSearchParams({
+      grant_type: "authorization_code",
+      code,
+      redirect_uri: ADMIN_OAUTH_REDIRECT_URI,
+      client_id: ATPROTO_CLIENT_ID,
+      code_verifier: flow.verifier,
+    });
+    const tokenResp = await dpopFetch(flow.authServerMeta.token_endpoint, {
+      method: "POST",
+      headers: { "content-type": "application/x-www-form-urlencoded" },
+      body: tokenBody.toString(),
+      dpopKeys: flow.dpopKeys,
+    });
+    if (!tokenResp.ok) {
+      const t = await tokenResp.text();
+      return new Response(`token exchange failed: ${tokenResp.status} ${t}`, { status: 502 });
+    }
+    const tokens = await tokenResp.json();
+    const did = tokens.sub || "";
+
+    if (did !== ATPROTO_DID) {
+      return new Response(
+        `Access denied: DID ${escapeHtml(did)} is not authorized to access the admin panel.`,
+        { status: 403 },
+      );
+    }
+
+    const token = randomB64url(32);
+    await env.ARTIFACTS.put(`admin-sessions/${token}.json`, JSON.stringify({
+      did,
+      createdAt: new Date().toISOString(),
+      expiresAt: Date.now() + ADMIN_SESSION_TTL_MS,
+    }));
+    await env.ARTIFACTS.delete(`oauth/flow/${state}.json`);
+
+    return new Response("", {
+      status: 302,
+      headers: {
+        Location: "/admin",
+        "Set-Cookie": `admin_session=${token}; HttpOnly; Secure; SameSite=Lax; Max-Age=3600; Path=/`,
+      },
+    });
+  } catch (e) {
+    return new Response(`admin oauth callback failed: ${e.message}`, { status: 500 });
+  }
+}
+
+async function handleAdminTrigger(request, env, url) {
+  const { session, redirect } = await requireAdminAuth(request, env);
+  if (redirect) return redirect;
+
+  const appSlug = url.pathname.replace(/^\/admin\/trigger\//, "").replace(/\/$/, "");
+  const app = APPS[appSlug];
+  if (!app) return new Response(`unknown app ${JSON.stringify(appSlug)}`, { status: 404 });
+
+  const body = await request.text();
+  const params = new URLSearchParams(body);
+  let sha = (params.get("sha") || "").trim();
+
+  if (!sha) {
+    sha = await resolveMainCommit(app.cloneUrl) || "";
+    if (!sha) {
+      return new Response(adminErrorPage(
+        `Could not resolve the latest main commit SHA for <strong>${escapeHtml(appSlug)}</strong>.
+         Please enter a full 40-character SHA in the form.`,
+      ), { status: 400, headers: { "content-type": "text/html; charset=utf-8" } });
+    }
+  }
+
+  if (!/^[0-9a-f]{40}$/.test(sha)) {
+    return new Response(adminErrorPage(`Invalid SHA: <code>${escapeHtml(sha)}</code> — must be a 40-character lowercase hex string.`), {
+      status: 400, headers: { "content-type": "text/html; charset=utf-8" },
+    });
+  }
+
+  try {
+    await triggerBuild(env, appSlug, app, sha);
+  } catch (e) {
+    return new Response(adminErrorPage(`Build trigger failed: ${escapeHtml(e.message)}`), {
+      status: 500, headers: { "content-type": "text/html; charset=utf-8" },
+    });
+  }
+
+  const html = `<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Build Triggered — artifacts.latha.org</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  :root { --bg: #0d1117; --surface: #161b22; --border: #30363d; --text: #e6edf3; --muted: #8b949e; --accent: #58a6ff; --code-bg: #1c2128; --green: #3fb950; }
+  body { font-family: system-ui, -apple-system, sans-serif; max-width: 40rem; margin: 3rem auto; padding: 0 1.25rem; background: var(--bg); color: var(--text); line-height: 1.6; }
+  .ok { color: var(--green); font-size: 1.05rem; font-weight: 600; }
+  a { color: var(--accent); }
+  code { background: var(--code-bg); padding: 0.1rem 0.35rem; border-radius: 4px; font-size: 0.875em; color: var(--accent); border: 1px solid var(--border); }
+</style>
+</head>
+<body>
+<p class="ok">✓ Build triggered for ${escapeHtml(appSlug)}@<code>${escapeHtml(sha)}</code></p>
+<p>The BuildBuddy invocation will appear in <a href="https://app.buildbuddy.io/" target="_blank" rel="noopener">app.buildbuddy.io</a> shortly. The invocation ID is also recorded at <code>/artifacts/${escapeHtml(appSlug)}/${escapeHtml(sha)}/invocation.json</code> once the trigger completes.</p>
+<p><a href="/admin">← back to admin</a></p>
+</body>
+</html>`;
+
+  return new Response(html, { headers: { "content-type": "text/html; charset=utf-8" } });
+}
+
+async function handleAdminLogout(request, env) {
+  const cookieHeader = request.headers.get("cookie") || "";
+  const match = cookieHeader.match(/(?:^|;\s*)admin_session=([A-Za-z0-9_-]+)/);
+  if (match) await env.ARTIFACTS.delete(`admin-sessions/${match[1]}.json`);
+  return new Response("", {
+    status: 302,
+    headers: {
+      Location: "/admin/login",
+      "Set-Cookie": "admin_session=; HttpOnly; Secure; SameSite=Lax; Max-Age=0; Path=/",
+    },
+  });
+}
+
+function adminErrorPage(message) {
+  return `<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Error — artifacts.latha.org admin</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  :root { --bg: #0d1117; --text: #e6edf3; --accent: #58a6ff; --red: #f85149; --border: #30363d; --code-bg: #1c2128; }
+  body { font-family: system-ui, sans-serif; max-width: 40rem; margin: 3rem auto; padding: 0 1.25rem; background: var(--bg); color: var(--text); line-height: 1.6; }
+  .err { color: var(--red); font-weight: 600; }
+  a { color: var(--accent); }
+  code { background: var(--code-bg); padding: 0.1rem 0.35rem; border-radius: 4px; font-size: 0.875em; border: 1px solid var(--border); color: var(--accent); }
+</style>
+</head>
+<body>
+<p class="err">Error</p>
+<p>${message}</p>
+<p><a href="/admin">← back to admin</a></p>
+</body>
+</html>`;
 }
