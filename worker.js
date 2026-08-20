@@ -719,15 +719,17 @@ async function handleIndex(env) {
     margin-bottom: 0.25rem;
   }
   h2 {
-    font-size: 1rem;
-    font-weight: 600;
+    font-size: 1.25rem;
+    font-weight: 700;
     margin-top: 2.5rem;
     margin-bottom: 0.5rem;
-    padding: 0.6rem 0.8rem;
-    background: var(--surface);
+    padding: 0.6rem 0.9rem;
+    background: var(--bg);
     border: 1px solid var(--border);
+    border-left: 3px solid var(--accent);
     border-radius: 6px;
-    color: var(--text);
+    color: var(--accent);
+    letter-spacing: -0.01em;
   }
   section {
     border: 1px solid var(--border);
@@ -1160,7 +1162,7 @@ async function handleAdminDashboard(request, env) {
     padding: 1rem 1.25rem 1.25rem; margin-top: 1.25rem;
     background: var(--surface);
   }
-  h2 { font-size: 1rem; font-weight: 600; margin: 0 0 0.2rem; color: var(--text); }
+  h2 { font-size: 1.25rem; font-weight: 700; margin: 0 0 0.6rem; padding: 0.5rem 0.9rem; background: var(--bg); border: 1px solid var(--border); border-left: 3px solid var(--accent); border-radius: 6px; color: var(--accent); letter-spacing: -0.01em; }
   .repo-link { margin: 0 0 0.85rem; font-size: 0.85rem; }
   a { color: var(--accent); text-decoration: none; }
   a:hover { text-decoration: underline; }
