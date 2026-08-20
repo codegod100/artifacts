@@ -617,6 +617,18 @@ function escapeHtml(s) {
   return s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 }
 
+function renderAppHeader(slug, cloneUrl, eyebrow, badgeText, { openInNewTab = false } = {}) {
+  const targetAttrs = openInNewTab ? ' target="_blank" rel="noopener"' : "";
+  return `<header class="app-header">
+      <div class="app-header-top">
+        <p class="app-eyebrow">${escapeHtml(eyebrow)}</p>
+        <span class="app-badge">${escapeHtml(badgeText)}</span>
+      </div>
+      <h2>${escapeHtml(slug)}</h2>
+      <p class="app-meta"><a href="${escapeHtml(cloneUrl)}"${targetAttrs}>${escapeHtml(cloneUrl.replace(/^https?:\/\//, ""))}</a></p>
+    </header>`;
+}
+
 // GET / — a plain landing page linking every registered app's artifacts.
 // "<app>/latest/*" is listed dynamically (one R2 list() per app) since it
 // changes on every main-branch build; a flatpak repo (if any) is detected
@@ -668,8 +680,7 @@ async function handleIndex(env) {
       : "";
 
     sections.push(`<section>
-      <h2>${escapeHtml(appSlug)}</h2>
-      <p><a href="${app.cloneUrl}">${escapeHtml(app.cloneUrl.replace(/^https?:\/\//, ""))}</a></p>
+      ${renderAppHeader(appSlug, app.cloneUrl, "App artifacts", "Latest builds")}
       ${flatpakBlock}
       ${apkBlock}
       <p><strong>Latest main-branch builds:</strong></p>
@@ -718,19 +729,6 @@ async function handleIndex(env) {
     color: var(--accent);
     margin-bottom: 0.25rem;
   }
-  h2 {
-    font-size: 1.25rem;
-    font-weight: 700;
-    margin-top: 2.5rem;
-    margin-bottom: 0.5rem;
-    padding: 0.6rem 0.9rem;
-    background: var(--bg);
-    border: 1px solid var(--border);
-    border-left: 3px solid var(--accent);
-    border-radius: 6px;
-    color: var(--accent);
-    letter-spacing: -0.01em;
-  }
   section {
     border: 1px solid var(--border);
     border-radius: 8px;
@@ -738,7 +736,58 @@ async function handleIndex(env) {
     margin-top: 1.25rem;
     background: var(--surface);
   }
-  section h2 { margin-top: 0; }
+  .app-header {
+    margin: -0.1rem 0 1rem;
+    padding: 0.9rem 1rem 0.95rem;
+    border: 1px solid rgba(88, 166, 255, 0.22);
+    border-radius: 10px;
+    background:
+      linear-gradient(135deg, rgba(88, 166, 255, 0.16), rgba(88, 166, 255, 0.04) 58%),
+      #11161d;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  }
+  .app-header-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    margin-bottom: 0.45rem;
+    flex-wrap: wrap;
+  }
+  .app-eyebrow {
+    margin: 0;
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+  .app-badge {
+    padding: 0.18rem 0.55rem;
+    border: 1px solid rgba(88, 166, 255, 0.24);
+    border-radius: 999px;
+    background: rgba(13, 17, 23, 0.5);
+    color: #c6e2ff;
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+  h2 {
+    margin: 0;
+    font-size: 1.65rem;
+    font-weight: 750;
+    letter-spacing: -0.035em;
+    line-height: 1.05;
+    color: var(--text);
+  }
+  .app-meta {
+    margin: 0.5rem 0 0;
+    font-size: 0.82rem;
+    color: var(--muted);
+  }
+  .app-meta a { color: inherit; }
+  .app-meta a:hover { color: var(--accent); }
   pre {
     background: var(--code-bg);
     border: 1px solid var(--border);
@@ -1120,8 +1169,7 @@ async function handleAdminDashboard(request, env) {
 
   const appSections = Object.entries(APPS).map(([slug, app]) => `
     <section class="app-card">
-      <h2>${escapeHtml(slug)}</h2>
-      <p class="repo-link"><a href="${escapeHtml(app.cloneUrl)}" target="_blank" rel="noopener">${escapeHtml(app.cloneUrl.replace(/^https?:\/\//, ""))}</a></p>
+      ${renderAppHeader(slug, app.cloneUrl, "Build controls", "Admin", { openInNewTab: true })}
       <form method="POST" action="/admin/trigger/${escapeHtml(slug)}">
         <div class="form-row">
           <label for="sha-${escapeHtml(slug)}">Commit SHA <span class="label-note">(leave blank to use latest main)</span></label>
@@ -1162,8 +1210,58 @@ async function handleAdminDashboard(request, env) {
     padding: 1rem 1.25rem 1.25rem; margin-top: 1.25rem;
     background: var(--surface);
   }
-  h2 { font-size: 1.25rem; font-weight: 700; margin: 0 0 0.6rem; padding: 0.5rem 0.9rem; background: var(--bg); border: 1px solid var(--border); border-left: 3px solid var(--accent); border-radius: 6px; color: var(--accent); letter-spacing: -0.01em; }
-  .repo-link { margin: 0 0 0.85rem; font-size: 0.85rem; }
+  .app-header {
+    margin: -0.1rem 0 0.95rem;
+    padding: 0.9rem 1rem 0.95rem;
+    border: 1px solid rgba(88, 166, 255, 0.22);
+    border-radius: 10px;
+    background:
+      linear-gradient(135deg, rgba(88, 166, 255, 0.16), rgba(88, 166, 255, 0.04) 58%),
+      #11161d;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  }
+  .app-header-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    margin-bottom: 0.45rem;
+    flex-wrap: wrap;
+  }
+  .app-eyebrow {
+    margin: 0;
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+  .app-badge {
+    padding: 0.18rem 0.55rem;
+    border: 1px solid rgba(88, 166, 255, 0.24);
+    border-radius: 999px;
+    background: rgba(13, 17, 23, 0.5);
+    color: #c6e2ff;
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+  h2 {
+    margin: 0;
+    font-size: 1.65rem;
+    font-weight: 750;
+    letter-spacing: -0.035em;
+    line-height: 1.05;
+    color: var(--text);
+  }
+  .app-meta {
+    margin: 0.5rem 0 0;
+    font-size: 0.82rem;
+    color: var(--muted);
+  }
+  .app-meta a { color: inherit; }
+  .app-meta a:hover { color: var(--accent); }
   a { color: var(--accent); text-decoration: none; }
   a:hover { text-decoration: underline; }
   label { display: block; font-size: 0.8rem; color: var(--muted); margin-bottom: 0.3rem; }
